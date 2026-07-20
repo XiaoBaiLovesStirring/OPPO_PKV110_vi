@@ -39,14 +39,26 @@ jobs:
           NDK=$HOME/android-ndk-cache/android-ndk-r29
           TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
           SYSROOT=$TOOLCHAIN/sysroot
-          RESDIR=$TOOLCHAIN/lib/clang/21
           API=${{ matrix.api }}
-          make preload \
-            CC="$TOOLCHAIN/bin/aarch64-linux-android21-clang" \
-            TARGET_FLAGS="--target=aarch64-linux-android$API --sysroot=$SYSROOT -resource-dir=$RESDIR --rtlib=compiler-rt --unwindlib=none" \
+
+          # Build su_daemon with -nostartfiles to avoid crt dependency
+          mkdir -p build/embed
+          $TOOLCHAIN/bin/clang --target=aarch64-linux-android$API \
+            --sysroot=$SYSROOT \
+            -resource-dir=$TOOLCHAIN/lib/clang/21 \
+            --rtlib=compiler-rt --unwindlib=none \
+            -fPIE -pie -O2 -g0 -nostartfiles \
+            -fuse-ld=lld \
+            -Wl,-dynamic-linker,/system/bin/linker64 \
+            -o build/embed/su_daemon_aarch64_pie \
+            src/su_daemon.c
+
+          # Build preload.so
+          make preload API=$API \
+            CC="$TOOLCHAIN/bin/clang" \
+            TARGET_FLAGS="--target=aarch64-linux-android$API --sysroot=$SYSROOT -resource-dir=$TOOLCHAIN/lib/clang/21 --rtlib=compiler-rt --unwindlib=none" \
             TARGET_COMMON_LDFLAGS="-fuse-ld=lld" \
-            TARGET_PIE_LDFLAGS="-fuse-ld=lld -Wl,-dynamic-linker,/system/bin/linker64" \
-            API=$API
+            TARGET_PIE_LDFLAGS="-fuse-ld=lld -Wl,-dynamic-linker,/system/bin/linker64"
 
       - name: Upload artifact (API=${{ matrix.api }})
         uses: actions/upload-artifact@v4
