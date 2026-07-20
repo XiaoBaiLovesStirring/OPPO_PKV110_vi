@@ -58,6 +58,11 @@ jobs:
             -o build/embed/su_daemon_aarch64_pie \
             src/su_daemon.c
 
+          # Build probe
+          make probe API=$API \
+            CC="$TOOLCHAIN/bin/clang" \
+            TARGET_FLAGS="--target=aarch64-linux-android$TARGET_API --sysroot=$SYSROOT -resource-dir=$RESDIR --rtlib=compiler-rt --unwindlib=none" \
+            TARGET_PIE_LDFLAGS="-fuse-ld=lld -L$LIBDIR/$TARGET_API -L$LIBDIR"
           # Build preload.so
           make preload API=$API \
             CC="$TOOLCHAIN/bin/clang" \
@@ -71,4 +76,5 @@ jobs:
           name: PKV110-preload-API${{ matrix.api }}
           path: |
             exploit/build/PKV110-16.0.2.401/bin/preload.so
+            exploit/build/PKV110-16.0.2.401/bin/probe
             exploit/build/embed/su_daemon_aarch64_pie
