@@ -37,11 +37,12 @@ jobs:
         run: |
           echo "ANDROID_NDK_HOME=$HOME/android-ndk-cache/android-ndk-r29" >> $GITHUB_ENV
           echo "NDK_ROOT=$HOME/android-ndk-cache/android-ndk-r29" >> $GITHUB_ENV
+          echo "NDK_CC=$HOME/android-ndk-cache/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${{ matrix.api }}-clang" >> $GITHUB_ENV
 
       - name: Build (API=${{ matrix.api }})
         run: |
           cd exploit
-          make preload API=${{ matrix.api }}
+          make preload CC="$NDK_CC" API=${{ matrix.api }}
 
       - name: Upload artifact (API=${{ matrix.api }})
         uses: actions/upload-artifact@v4
