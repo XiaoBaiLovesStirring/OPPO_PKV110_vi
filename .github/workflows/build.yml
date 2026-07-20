@@ -1,0 +1,52 @@
+name: Build PKV110 Exploit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        api: [35, 37]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache NDK
+        id: cache-ndk
+        uses: actions/cache@v4
+        with:
+          path: ~/android-ndk-cache/android-ndk-r29
+          key: ndk-r29-${{ runner.os }}
+
+      - name: Download Android NDK
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/android-ndk-cache
+          cd ~/android-ndk-cache
+          wget -q https://dl.google.com/android/repository/android-ndk-r29-linux.zip
+          unzip -q android-ndk-r29-linux.zip
+          rm android-ndk-r29-linux.zip
+
+      - name: Setup NDK
+        run: |
+          echo "ANDROID_NDK_HOME=$HOME/android-ndk-cache/android-ndk-r29" >> $GITHUB_ENV
+          echo "NDK_ROOT=$HOME/android-ndk-cache/android-ndk-r29" >> $GITHUB_ENV
+
+      - name: Build (API=${{ matrix.api }})
+        run: |
+          cd exploit
+          make preload API=${{ matrix.api }}
+
+      - name: Upload artifact (API=${{ matrix.api }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: PKV110-preload-API${{ matrix.api }}
+          path: |
+            exploit/build/PKV110-16.0.2.401/bin/preload.so
+            exploit/build/embed/su_daemon_aarch64_pie
