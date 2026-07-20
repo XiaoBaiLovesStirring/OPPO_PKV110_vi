@@ -22,7 +22,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/android-ndk-cache/android-ndk-r29
-          key: ndk-r29-v2-${{ runner.os }}
+          key: ndk-r29-v3-${{ runner.os }}
 
       - name: Download Android NDK
         if: steps.cache-ndk.outputs.cache-hit != 'true'
@@ -32,36 +32,20 @@ jobs:
           wget -q https://dl.google.com/android/repository/android-ndk-r29-linux.zip
           unzip -q android-ndk-r29-linux.zip
           rm android-ndk-r29-linux.zip
-          echo "NDK downloaded"
-
-      - name: Verify NDK
-        run: |
-          ls ~/android-ndk-cache/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android* | head -5
-          echo "---"
-          ~/android-ndk-cache/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang --version 2>&1 || true
-
-      - name: Setup NDK
-        run: |
-          NDK_BASE=$HOME/android-ndk-cache/android-ndk-r29
-          echo "ANDROID_NDK_HOME=$NDK_BASE" >> $GITHUB_ENV
-          echo "NDK_ROOT=$NDK_BASE" >> $GITHUB_ENV
-          TOOLCHAIN=$NDK_BASE/toolchains/llvm/prebuilt/linux-x86_64
-          echo "SYSROOT=$TOOLCHAIN/sysroot" >> $GITHUB_ENV
-          echo "RESOURCE_DIR=$TOOLCHAIN/lib/clang/21" >> $GITHUB_ENV
 
       - name: Build (API=${{ matrix.api }})
         run: |
           cd exploit
-          API=${{ matrix.api }}
-          TOOLCHAIN=$HOME/android-ndk-cache/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64
+          NDK=$HOME/android-ndk-cache/android-ndk-r29
+          TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
           SYSROOT=$TOOLCHAIN/sysroot
           RESDIR=$TOOLCHAIN/lib/clang/21
-          LIBDIR=$SYSROOT/usr/lib/aarch64-linux-android
+          API=${{ matrix.api }}
           make preload \
-            CC="clang" \
-            TARGET_FLAGS="--target=aarch64-linux-android$API --sysroot=$SYSROOT -resource-dir $RESDIR" \
-            TARGET_COMMON_LDFLAGS="-fuse-ld=lld -Wl,-rpath-link,$LIBDIR/$API -L$LIBDIR/$API -L$LIBDIR -B$LIBDIR/$API" \
-            TARGET_PIE_LDFLAGS="-fuse-ld=lld -Wl,-rpath-link,$LIBDIR/$API -L$LIBDIR/$API -L$LIBDIR -B$LIBDIR/$API -Wl,-dynamic-linker,/system/bin/linker64" \
+            CC="$TOOLCHAIN/bin/aarch64-linux-android21-clang" \
+            TARGET_FLAGS="--target=aarch64-linux-android$API" \
+            TARGET_COMMON_LDFLAGS="" \
+            TARGET_PIE_LDFLAGS="" \
             API=$API
 
       - name: Upload artifact (API=${{ matrix.api }})
