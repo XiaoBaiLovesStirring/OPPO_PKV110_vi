@@ -1,0 +1,79 @@
+name: Build PKV110 Exploit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        api: [35]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache NDK
+        id: cache-ndk
+        uses: actions/cache@v4
+        with:
+          path: ~/android-ndk-cache/android-ndk-r29
+          key: ndk-r29-v3-${{ runner.os }}
+
+      - name: Download Android NDK
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/android-ndk-cache
+          cd ~/android-ndk-cache
+          wget -q https://dl.google.com/android/repository/android-ndk-r29-linux.zip
+          unzip -q android-ndk-r29-linux.zip
+          rm android-ndk-r29-linux.zip
+
+      - name: Build (API=${{ matrix.api }})
+        run: |
+          cd IonStack/CVE-2026-43499/exploit
+          NDK=$HOME/android-ndk-cache/android-ndk-r29
+          TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
+          SYSROOT=$TOOLCHAIN/sysroot
+          RESDIR=$TOOLCHAIN/lib/clang/21
+          LIBDIR=$SYSROOT/usr/lib/aarch64-linux-android
+          API=${{ matrix.api }}
+          TARGET_API=35
+
+          # Build su_daemon
+          mkdir -p build/embed
+          $TOOLCHAIN/bin/clang --target=aarch64-linux-android$TARGET_API \
+            --sysroot=$SYSROOT \
+            -resource-dir=$RESDIR \
+            --rtlib=compiler-rt --unwindlib=none \
+            -fPIE -pie -O2 -g0 -nostartfiles \
+            -fuse-ld=lld \
+            -L$LIBDIR/$TARGET_API -L$LIBDIR \
+            -Wl,-dynamic-linker,/system/bin/linker64 \
+            -o build/embed/su_daemon_aarch64_pie \
+            src/su_daemon.c
+
+          # Build probe
+          make probe API=$API \
+            CC="$TOOLCHAIN/bin/clang" \
+            TARGET_FLAGS="--target=aarch64-linux-android$TARGET_API --sysroot=$SYSROOT -resource-dir=$RESDIR --rtlib=compiler-rt --unwindlib=none" \
+            TARGET_PIE_LDFLAGS="-fuse-ld=lld -L$LIBDIR/$TARGET_API -L$LIBDIR"
+          # Build preload.so
+          make preload API=$API \
+            CC="$TOOLCHAIN/bin/clang" \
+            TARGET_FLAGS="--target=aarch64-linux-android$TARGET_API --sysroot=$SYSROOT -resource-dir=$RESDIR --rtlib=compiler-rt --unwindlib=none" \
+            TARGET_COMMON_LDFLAGS="-fuse-ld=lld -L$LIBDIR/$TARGET_API -L$LIBDIR" \
+            TARGET_PIE_LDFLAGS="-fuse-ld=lld -L$LIBDIR/$TARGET_API -L$LIBDIR"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PKV110-preload
+          path: |
+            IonStack/CVE-2026-43499/exploit/build/PKV110-16.0.2.401/bin/preload.so
+            IonStack/CVE-2026-43499/exploit/build/PKV110-16.0.2.401/bin/probe
+            IonStack/CVE-2026-43499/exploit/build/embed/su_daemon_aarch64_pie
